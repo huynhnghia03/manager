@@ -1,0 +1,5 @@
+{
+  "name": "Salary Sheet Manager",
+  "description": "A dashboard to manage work days, calculate salary, and analyze income using Google Sheets and Gemini AI.",
+  "requestFramePermissions": []
+}
