@@ -12,6 +12,42 @@ let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
 
+// Token persistence helpers
+const TOKEN_KEY = 'google_oauth_token';
+
+const saveToken = (token: any) => {
+  if (token) {
+    const tokenData = {
+      ...token,
+      savedAt: Date.now()
+    };
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(tokenData));
+  }
+};
+
+const loadToken = (): any | null => {
+  try {
+    const stored = localStorage.getItem(TOKEN_KEY);
+    if (stored) {
+      const tokenData = JSON.parse(stored);
+      // Check if token is expired (tokens typically last 1 hour = 3600000ms)
+      const elapsed = Date.now() - (tokenData.savedAt || 0);
+      if (elapsed < 3500000) { // 58 minutes (with buffer)
+        return tokenData;
+      }
+      // Token expired, remove it
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch (e) {
+    console.error('Error loading token:', e);
+  }
+  return null;
+};
+
+const clearToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+};
+
 export const initializeGoogleApi = (updateSigninStatus: (isSignedIn: boolean, error: any | null) => void) => {
   const gapiLoaded = () => {
     window.gapi.load('client', async () => {
@@ -65,7 +101,12 @@ export const initializeGoogleApi = (updateSigninStatus: (isSignedIn: boolean, er
 
 const maybeEnableButtons = (updateSigninStatus: (isSignedIn: boolean, error: any | null) => void) => {
   if (gapiInited && gisInited) {
-    // Check if we have a valid token stored (simple check)
+    // Try to restore token from localStorage
+    const savedToken = loadToken();
+    if (savedToken && !window.gapi.client.getToken()) {
+      window.gapi.client.setToken(savedToken);
+    }
+
     const token = window.gapi.client.getToken();
     updateSigninStatus(!!token, null);
   }
@@ -78,6 +119,9 @@ export const handleAuthClick = async (updateSigninStatus: (isSignedIn: boolean) 
         reject(resp);
         throw (resp);
       }
+      // Save token to localStorage for session persistence
+      const token = window.gapi.client.getToken();
+      saveToken(token);
       updateSigninStatus(true);
       resolve();
     };
@@ -97,6 +141,7 @@ export const handleSignoutClick = (updateSigninStatus: (isSignedIn: boolean) => 
   if (token !== null) {
     window.google.accounts.oauth2.revoke(token.access_token);
     window.gapi.client.setToken('');
+    clearToken(); // Clear from localStorage
     updateSigninStatus(false);
   }
 };
